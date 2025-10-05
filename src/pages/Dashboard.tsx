@@ -1,20 +1,20 @@
 import { Header } from "@/components/Header";
 import { DashboardCard } from "@/components/DashboardCard";
-import { Phone, MessageSquare, History, Settings } from "lucide-react";
+import { MessageSquare, History, Settings, Skull } from "lucide-react";
 
 const Dashboard = () => {
   const cards = [
     {
-      title: "Start Call",
-      icon: Phone,
-      path: "/live-call",
-      description: "Real-time voice translation",
-    },
-    {
       title: "Chat Translator",
       icon: MessageSquare,
       path: "/chat",
-      description: "Text-based translation",
+      description: "Text & voice translation",
+    },
+    {
+      title: "Pirate Chat",
+      icon: Skull,
+      path: "/pirate-chat",
+      description: "Chat with Captain Blackbeard",
     },
     {
       title: "History",

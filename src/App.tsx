@@ -5,8 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import LiveCall from "./pages/LiveCall";
 import Chat from "./pages/Chat";
+import PirateChat from "./pages/PirateChat";
 import History from "./pages/History";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
@@ -22,8 +22,8 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/live-call" element={<LiveCall />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/pirate-chat" element={<PirateChat />} />
           <Route path="/history" element={<History />} />
           <Route path="/settings" element={<Settings />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Header } from "@/components/Header";
 import { ChatBubble } from "@/components/ChatBubble";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Send, ArrowLeftRight } from "lucide-react";
+import { Send, ArrowLeftRight, Mic, Loader2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 interface Message {
   id: number;
@@ -22,6 +23,9 @@ const Chat = () => {
   const [inputText, setInputText] = useState("");
   const [sourceLang, setSourceLang] = useState("en");
   const [targetLang, setTargetLang] = useState("es");
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -32,19 +36,94 @@ const Chat = () => {
     },
   ]);
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
+  const handleSend = async () => {
+    if (!inputText.trim() || isTranslating) return;
     
-    const newMessage: Message = {
-      id: messages.length + 1,
-      original: inputText,
-      translated: `[Translation of: ${inputText}]`,
-      sourceLang: sourceLang.toUpperCase(),
-      targetLang: targetLang.toUpperCase(),
-    };
+    setIsTranslating(true);
     
-    setMessages([...messages, newMessage]);
-    setInputText("");
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translate-text`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          text: inputText,
+          sourceLang: sourceLang,
+          targetLang: targetLang,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          toast.error("Rate limit exceeded. Please try again later.");
+        } else if (response.status === 402) {
+          toast.error("Credits required. Please add credits to continue.");
+        } else {
+          toast.error("Translation failed. Please try again.");
+        }
+        return;
+      }
+
+      const data = await response.json();
+      
+      const newMessage: Message = {
+        id: messages.length + 1,
+        original: inputText,
+        translated: data.translatedText,
+        sourceLang: sourceLang.toUpperCase(),
+        targetLang: targetLang.toUpperCase(),
+      };
+      
+      setMessages([...messages, newMessage]);
+      setInputText("");
+    } catch (error) {
+      console.error("Translation error:", error);
+      toast.error("Failed to translate. Please try again.");
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleVoiceInput = async () => {
+    if (isRecording) {
+      // Stop recording
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+      }
+      return;
+    }
+
+    // Start recording
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const audioChunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunks.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+        
+        // Here you would typically send the audio to a speech-to-text service
+        // For now, we'll show a placeholder message
+        toast.info("Voice input received! (Speech-to-text integration coming soon)");
+        
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      mediaRecorderRef.current = mediaRecorder;
+      setIsRecording(true);
+      toast.success("Recording... Tap again to stop");
+    } catch (error) {
+      console.error("Microphone access error:", error);
+      toast.error("Unable to access microphone. Please check permissions.");
+    }
   };
 
   const swapLanguages = () => {
@@ -57,23 +136,6 @@ const Chat = () => {
     <div className="min-h-screen bg-background flex flex-col">
       <Header showBack showLanguage />
 
-      <div className="border-b bg-card shadow-sm">
-        <div className="container mx-auto px-4">
-          <Tabs defaultValue="chat" className="w-full">
-            <TabsList className="w-full justify-start h-12 bg-transparent border-b-0">
-              <TabsTrigger value="call" onClick={() => navigate("/live-call")} className="rounded-none">
-                Start Call
-              </TabsTrigger>
-              <TabsTrigger value="chat" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
-                Chat
-              </TabsTrigger>
-              <TabsTrigger value="history" onClick={() => navigate("/history")} className="rounded-none">
-                History
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-      </div>
 
       <main className="flex-1 container mx-auto px-4 py-6">
         <div className="max-w-4xl mx-auto h-full flex flex-col gap-6">
@@ -118,15 +180,30 @@ const Chat = () => {
           {/* Input */}
           <Card className="card-gradient shadow-card p-4">
             <div className="flex gap-2">
+              <Button
+                onClick={handleVoiceInput}
+                size="icon"
+                variant={isRecording ? "destructive" : "outline"}
+                className="transition-smooth"
+                disabled={isTranslating}
+              >
+                <Mic className={`h-4 w-4 ${isRecording ? "animate-pulse" : ""}`} />
+              </Button>
               <Input
                 placeholder="Type your message..."
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleSend()}
+                onKeyPress={(e) => e.key === "Enter" && !isTranslating && handleSend()}
+                disabled={isTranslating}
                 className="flex-1 transition-base"
               />
-              <Button onClick={handleSend} size="icon" className="transition-smooth">
-                <Send className="h-4 w-4" />
+              <Button
+                onClick={handleSend}
+                size="icon"
+                disabled={isTranslating || !inputText.trim()}
+                className="transition-smooth"
+              >
+                {isTranslating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
           </Card>

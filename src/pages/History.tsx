@@ -51,23 +51,6 @@ const History = () => {
     <div className="min-h-screen bg-background">
       <Header showBack showLanguage />
 
-      <div className="border-b bg-card shadow-sm">
-        <div className="container mx-auto px-4">
-          <Tabs defaultValue="history" className="w-full">
-            <TabsList className="w-full justify-start h-12 bg-transparent border-b-0">
-              <TabsTrigger value="call" onClick={() => navigate("/live-call")} className="rounded-none">
-                Start Call
-              </TabsTrigger>
-              <TabsTrigger value="chat" onClick={() => navigate("/chat")} className="rounded-none">
-                Chat
-              </TabsTrigger>
-              <TabsTrigger value="history" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
-                History
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-      </div>
 
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-6">
