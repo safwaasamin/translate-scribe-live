@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Languages, MessageSquare, Skull, Globe, Zap, Mic, Volume2, Brain, Users, Star, ArrowRight, Check } from "lucide-react";
+import { Languages, MessageSquare, Skull, Globe, Zap, Mic, Volume2, Brain, Users, Star, ArrowRight, Check, UserPlus, Settings, Headphones } from "lucide-react";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -66,6 +66,33 @@ const Home = () => {
     "Translation history",
     "Multiple AI models",
     "Secure & private"
+  ];
+
+  const steps = [
+    {
+      number: "1",
+      icon: UserPlus,
+      title: "Create Your Account",
+      description: "Sign up for free in seconds. No credit card required. Just enter your email and password to get started."
+    },
+    {
+      number: "2",
+      icon: Settings,
+      title: "Choose Your Languages",
+      description: "Select your source and target languages from 100+ options. Enable auto-detect to automatically identify the language."
+    },
+    {
+      number: "3",
+      icon: Mic,
+      title: "Start Speaking or Typing",
+      description: "Use the microphone for voice input or type your message. Our AI instantly recognizes and processes your input."
+    },
+    {
+      number: "4",
+      icon: Headphones,
+      title: "Get Instant Translation",
+      description: "Receive accurate translations in real-time. Listen to the audio output or read the translated text on screen."
+    }
   ];
 
   return (
@@ -162,8 +189,71 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Use Cases Section */}
+      {/* How It Works Section */}
       <div className="bg-gradient-subtle py-16">
+        <div className="container mx-auto px-4">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center space-y-4 mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground">
+                How It Works
+              </h2>
+              <p className="text-muted-foreground text-lg">
+                Get started in 4 simple steps
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+              {steps.map((step, index) => (
+                <div
+                  key={step.number}
+                  className="relative flex flex-col items-center text-center space-y-4 animate-fade-in"
+                  style={{ animationDelay: `${index * 0.15}s` }}
+                >
+                  {/* Connector Line */}
+                  {index < steps.length - 1 && (
+                    <div className="hidden lg:block absolute top-12 left-[60%] w-full h-0.5 bg-gradient-to-r from-primary/50 to-primary/20" />
+                  )}
+                  
+                  {/* Step Number Badge */}
+                  <div className="relative">
+                    <div className="flex h-24 w-24 items-center justify-center rounded-full primary-gradient shadow-elegant hover-scale">
+                      <step.icon className="h-10 w-10 text-primary-foreground" />
+                    </div>
+                    <div className="absolute -bottom-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-sm shadow-lg">
+                      {step.number}
+                    </div>
+                  </div>
+
+                  {/* Step Content */}
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-xl text-foreground">
+                      {step.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {step.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* CTA after steps */}
+            <div className="text-center mt-12">
+              <Button 
+                size="lg" 
+                className="h-14 px-8 text-lg transition-smooth group"
+                onClick={() => navigate("/login")}
+              >
+                Start Your Free Trial
+                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Use Cases Section */}
+      <div className="container mx-auto px-4 py-16">
         <div className="container mx-auto px-4">
           <div className="max-w-5xl mx-auto">
             <div className="text-center space-y-4 mb-12">
