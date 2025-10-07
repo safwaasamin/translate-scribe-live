@@ -14,10 +14,20 @@ const languages = [
   { code: "de", name: "German" },
   { code: "zh", name: "Chinese" },
   { code: "ar", name: "Arabic" },
-  { code: "hi", name: "Hindi" },
+  { code: "hi", name: "Hindi (हिन्दी)" },
+  { code: "ta", name: "Tamil (தமிழ்)" },
+  { code: "ur", name: "Urdu (اردو)" },
   { code: "ja", name: "Japanese" },
   { code: "pt", name: "Portuguese" },
   { code: "ru", name: "Russian" },
+  { code: "ko", name: "Korean" },
+  { code: "it", name: "Italian" },
+  { code: "bn", name: "Bengali (বাংলা)" },
+  { code: "te", name: "Telugu (తెలుగు)" },
+  { code: "mr", name: "Marathi (मराठी)" },
+  { code: "tr", name: "Turkish" },
+  { code: "vi", name: "Vietnamese" },
+  { code: "pl", name: "Polish" },
 ];
 
 export const LanguageSelector = ({ value, onChange, label }: LanguageSelectorProps) => {
@@ -31,7 +41,7 @@ export const LanguageSelector = ({ value, onChange, label }: LanguageSelectorPro
             <SelectValue placeholder="Select language" />
           </div>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="max-h-[300px] overflow-y-auto bg-popover z-50">
           {languages.map((lang) => (
             <SelectItem key={lang.code} value={lang.code}>
               {lang.name}
