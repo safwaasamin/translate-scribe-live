@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Volume2, Trash2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 interface HistoryItem {
   id: number;
@@ -17,6 +18,15 @@ interface HistoryItem {
 
 const History = () => {
   const navigate = useNavigate();
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
   const historyItems: HistoryItem[] = [
     {
       id: 1,

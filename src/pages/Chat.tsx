@@ -5,10 +5,11 @@ import { LanguageSelector } from "@/components/LanguageSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Send, ArrowLeftRight, Mic, Loader2 } from "lucide-react";
+import { Send, ArrowLeftRight, Mic, Loader2, Volume2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Message {
   id: number;
@@ -20,11 +21,14 @@ interface Message {
 
 const Chat = () => {
   const navigate = useNavigate();
+  const { loading } = useAuth();
   const [inputText, setInputText] = useState("");
   const [sourceLang, setSourceLang] = useState("en");
   const [targetLang, setTargetLang] = useState("es");
   const [isTranslating, setIsTranslating] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -109,9 +113,38 @@ const Chat = () => {
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
         
-        // Here you would typically send the audio to a speech-to-text service
-        // For now, we'll show a placeholder message
-        toast.info("Voice input received! (Speech-to-text integration coming soon)");
+        try {
+          // Convert audio blob to base64
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = async () => {
+            const base64Audio = (reader.result as string).split(',')[1];
+            
+            toast.info("Transcribing audio...");
+            
+            // Send to speech-to-text edge function
+            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/speech-to-text`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+              },
+              body: JSON.stringify({ audio: base64Audio }),
+            });
+
+            if (!response.ok) {
+              toast.error("Failed to transcribe audio. Please try again.");
+              return;
+            }
+
+            const data = await response.json();
+            setInputText(data.text);
+            toast.success("Audio transcribed successfully!");
+          };
+        } catch (error) {
+          console.error("Transcription error:", error);
+          toast.error("Failed to process audio. Please try again.");
+        }
         
         stream.getTracks().forEach(track => track.stop());
       };
@@ -126,11 +159,77 @@ const Chat = () => {
     }
   };
 
+  const handlePlayAudio = async (text: string, messageId: number) => {
+    // Stop any currently playing audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+      setPlayingAudioId(null);
+    }
+
+    // If clicking the same message, just stop
+    if (playingAudioId === messageId) {
+      return;
+    }
+
+    try {
+      setPlayingAudioId(messageId);
+      toast.info("Generating audio...");
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!response.ok) {
+        toast.error("Failed to generate audio. Please try again.");
+        setPlayingAudioId(null);
+        return;
+      }
+
+      const data = await response.json();
+      
+      // Create audio element and play
+      const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
+      audioRef.current = audio;
+      
+      audio.onended = () => {
+        setPlayingAudioId(null);
+        audioRef.current = null;
+      };
+      
+      audio.onerror = () => {
+        toast.error("Failed to play audio.");
+        setPlayingAudioId(null);
+        audioRef.current = null;
+      };
+
+      await audio.play();
+      toast.success("Playing audio...");
+    } catch (error) {
+      console.error("Audio playback error:", error);
+      toast.error("Failed to play audio. Please try again.");
+      setPlayingAudioId(null);
+    }
+  };
+
   const swapLanguages = () => {
     const temp = sourceLang;
     setSourceLang(targetLang);
     setTargetLang(temp);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -166,11 +265,15 @@ const Chat = () => {
                     text={message.original}
                     isOriginal={true}
                     language={message.sourceLang}
+                    onPlayAudio={() => handlePlayAudio(message.original, message.id * 2)}
+                    isPlaying={playingAudioId === message.id * 2}
                   />
                   <ChatBubble
                     text={message.translated}
                     isOriginal={false}
                     language={message.targetLang}
+                    onPlayAudio={() => handlePlayAudio(message.translated, message.id * 2 + 1)}
+                    isPlaying={playingAudioId === message.id * 2 + 1}
                   />
                 </div>
               ))}

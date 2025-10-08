@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Message {
   role: "user" | "assistant";
@@ -13,6 +14,15 @@ interface Message {
 }
 
 const PirateChat = () => {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
