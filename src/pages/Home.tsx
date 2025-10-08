@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Languages, MessageSquare, Skull, Globe, Zap, Mic, Volume2, Brain, Users, Star, ArrowRight, Check, UserPlus, Settings, Headphones } from "lucide-react";
+import { Languages, MessageSquare, Skull, Globe, Zap, Mic, Brain, Users, Star, ArrowRight, Check, UserPlus, Settings, Headphones } from "lucide-react";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -128,7 +128,7 @@ const Home = () => {
               <Button 
                 size="lg" 
                 className="h-14 px-8 text-lg transition-smooth group"
-                onClick={() => navigate("/login")}
+                onClick={() => navigate("/auth")}
               >
                 Get Started Free
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
@@ -137,10 +137,9 @@ const Home = () => {
                 size="lg" 
                 variant="outline"
                 className="h-14 px-8 text-lg transition-smooth"
-                onClick={() => navigate("/login")}
+                onClick={() => navigate("/auth")}
               >
-                <Volume2 className="mr-2 h-5 w-5" />
-                Watch Demo
+                Sign In
               </Button>
             </div>
           </div>
@@ -242,7 +241,7 @@ const Home = () => {
               <Button 
                 size="lg" 
                 className="h-14 px-8 text-lg transition-smooth group"
-                onClick={() => navigate("/login")}
+                onClick={() => navigate("/auth")}
               >
                 Start Your Free Trial
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
@@ -303,7 +302,7 @@ const Home = () => {
                 <Button 
                   size="lg" 
                   className="h-12 text-base transition-smooth"
-                  onClick={() => navigate("/login")}
+                  onClick={() => navigate("/auth")}
                 >
                   Start Translating Now
                 </Button>
@@ -339,7 +338,7 @@ const Home = () => {
                 size="lg" 
                 variant="secondary"
                 className="h-14 px-8 text-lg transition-smooth"
-                onClick={() => navigate("/login")}
+                onClick={() => navigate("/auth")}
               >
                 Create Free Account
               </Button>
