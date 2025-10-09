@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { DashboardCard } from "@/components/DashboardCard";
-import { MessageSquare, History, Settings, Skull } from "lucide-react";
+import { MessageSquare, History, Settings, Skull, Phone } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 const Dashboard = () => {
@@ -23,6 +23,12 @@ const Dashboard = () => {
       icon: MessageSquare,
       path: "/chat",
       description: "Text & voice translation",
+    },
+    {
+      title: "Live Call Translation",
+      icon: Phone,
+      path: "/live-call",
+      description: "Real-time voice translation",
     },
     {
       title: "Pirate Chat",

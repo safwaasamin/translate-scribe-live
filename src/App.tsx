@@ -8,6 +8,7 @@ import Auth from "./pages/Auth";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
+import LiveCall from "./pages/LiveCall";
 import PirateChat from "./pages/PirateChat";
 import History from "./pages/History";
 import Settings from "./pages/Settings";
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/live-call" element={<LiveCall />} />
           <Route path="/pirate-chat" element={<PirateChat />} />
           <Route path="/history" element={<History />} />
           <Route path="/settings" element={<Settings />} />
