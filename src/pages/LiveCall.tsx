@@ -14,6 +14,48 @@ interface TranscriptItem {
   timestamp: Date;
 }
 
+// Define SpeechRecognition types
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognitionInterface extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: any) => void) | null;
+  onend: (() => void) | null;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
 const LiveCall = () => {
   const { loading } = useAuth();
   const [sourceLang, setSourceLang] = useState("en");
@@ -22,10 +64,7 @@ const LiveCall = () => {
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
-  const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInterface | null>(null);
 
   const swapLanguages = () => {
     const temp = sourceLang;
@@ -33,173 +72,132 @@ const LiveCall = () => {
     setTargetLang(temp);
   };
 
-  const processAudioChunk = async () => {
-    if (audioChunksRef.current.length === 0 || isProcessing) return;
+  const translateAndSpeak = async (text: string) => {
+    if (isProcessing || !text.trim()) return;
     
     setIsProcessing(true);
-    const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-    audioChunksRef.current = [];
 
     try {
-      // Convert to base64
-      const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
-      reader.onloadend = async () => {
-        const base64Audio = (reader.result as string).split(',')[1];
-        
-        // Transcribe
-        const transcribeResponse = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/speech-to-text`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
-            body: JSON.stringify({ audio: base64Audio }),
-          }
-        );
-
-        if (!transcribeResponse.ok) {
-          console.error("Transcription failed");
-          setIsProcessing(false);
-          return;
-        }
-
-        const { text } = await transcribeResponse.json();
-        
-        if (!text || text.trim().length === 0) {
-          setIsProcessing(false);
-          return;
-        }
-
-        // Translate
-        const translateResponse = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translate-text`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
-            body: JSON.stringify({
-              text,
-              sourceLang,
-              targetLang,
-            }),
-          }
-        );
-
-        if (!translateResponse.ok) {
-          console.error("Translation failed");
-          setIsProcessing(false);
-          return;
-        }
-
-        const { translatedText } = await translateResponse.json();
-
-        // Add to transcripts
-        setTranscripts(prev => [
-          ...prev,
-          {
-            id: Date.now(),
-            original: text,
-            translated: translatedText,
-            timestamp: new Date(),
+      // Translate the text
+      const translateResponse = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translate-text`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-        ]);
-
-        // Play translated audio
-        const ttsResponse = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
-            body: JSON.stringify({ text: translatedText }),
-          }
-        );
-
-        if (ttsResponse.ok) {
-          const { audioContent } = await ttsResponse.json();
-          const audio = new Audio(`data:audio/mp3;base64,${audioContent}`);
-          audio.play();
+          body: JSON.stringify({
+            text,
+            sourceLang,
+            targetLang,
+          }),
         }
+      );
 
+      if (!translateResponse.ok) {
+        console.error("Translation failed");
         setIsProcessing(false);
-      };
+        return;
+      }
+
+      const { translatedText } = await translateResponse.json();
+
+      // Add to transcripts
+      setTranscripts(prev => [
+        ...prev,
+        {
+          id: Date.now(),
+          original: text,
+          translated: translatedText,
+          timestamp: new Date(),
+        },
+      ]);
+
+      // Speak the translated text using Web Speech API
+      const utterance = new SpeechSynthesisUtterance(translatedText);
+      utterance.lang = targetLang;
+      window.speechSynthesis.speak(utterance);
+
+      setIsProcessing(false);
     } catch (error) {
-      console.error("Processing error:", error);
+      console.error("Translation error:", error);
+      toast.error("Translation failed");
       setIsProcessing(false);
     }
   };
 
   const startCall = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
+      // Check if browser supports Web Speech API
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      
+      if (!SpeechRecognition) {
+        toast.error("Speech recognition not supported in this browser");
+        return;
+      }
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm',
-      });
+      const recognition = new SpeechRecognition() as SpeechRecognitionInterface;
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = sourceLang;
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        const result = event.results[event.resultIndex];
+        if (result.isFinal) {
+          const transcript = result[0].transcript;
+          console.log("Recognized:", transcript);
+          translateAndSpeak(transcript);
         }
       };
 
-      mediaRecorder.start();
-      mediaRecorderRef.current = mediaRecorder;
-      setIsCallActive(true);
-      toast.success("Live call started");
-
-      // Process audio every 3 seconds
-      processingTimeoutRef.current = setInterval(() => {
-        if (mediaRecorder.state === "recording") {
-          mediaRecorder.stop();
-          mediaRecorder.start();
+      recognition.onerror = (event) => {
+        console.error("Speech recognition error:", event);
+        if (event.error === 'no-speech') {
+          // Ignore no-speech errors as they're common during pauses
+          return;
         }
-      }, 3000);
+        toast.error(`Recognition error: ${event.error}`);
+      };
+
+      recognition.onend = () => {
+        // Restart recognition if call is still active
+        if (isCallActive && recognitionRef.current) {
+          try {
+            recognition.start();
+          } catch (error) {
+            console.error("Error restarting recognition:", error);
+          }
+        }
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+      setIsCallActive(true);
+      toast.success("Live call started - speak now!");
     } catch (error) {
       console.error("Error starting call:", error);
-      toast.error("Unable to access microphone");
+      toast.error("Unable to start speech recognition");
     }
   };
 
   const endCall = () => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current = null;
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
     }
 
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-
-    if (processingTimeoutRef.current) {
-      clearInterval(processingTimeoutRef.current);
-      processingTimeoutRef.current = null;
-    }
-
-    audioChunksRef.current = [];
+    window.speechSynthesis.cancel();
     setIsCallActive(false);
     toast.info("Call ended");
   };
 
   useEffect(() => {
-    // Process accumulated audio chunks periodically
-    const interval = setInterval(() => {
-      if (isCallActive && !isProcessing) {
-        processAudioChunk();
-      }
-    }, 3500);
-
-    return () => clearInterval(interval);
-  }, [isCallActive, isProcessing, sourceLang, targetLang]);
+    // Update recognition language when source language changes
+    if (recognitionRef.current && isCallActive) {
+      recognitionRef.current.lang = sourceLang;
+    }
+  }, [sourceLang]);
 
   useEffect(() => {
     return () => {
