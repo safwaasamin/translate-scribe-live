@@ -28,8 +28,6 @@ const Chat = () => {
   const [isTranslating, setIsTranslating] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -92,124 +90,85 @@ const Chat = () => {
 
   const handleVoiceInput = async () => {
     if (isRecording) {
-      // Stop recording
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-        mediaRecorderRef.current.stop();
-        setIsRecording(false);
-      }
-      return;
-    }
-
-    // Start recording
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      const audioChunks: Blob[] = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunks.push(event.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-        
-        try {
-          // Convert audio blob to base64
-          const reader = new FileReader();
-          reader.readAsDataURL(audioBlob);
-          reader.onloadend = async () => {
-            const base64Audio = (reader.result as string).split(',')[1];
-            
-            toast.info("Transcribing audio...");
-            
-            // Send to speech-to-text edge function
-            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/speech-to-text`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-              },
-              body: JSON.stringify({ audio: base64Audio }),
-            });
-
-            if (!response.ok) {
-              toast.error("Failed to transcribe audio. Please try again.");
-              return;
-            }
-
-            const data = await response.json();
-            setInputText(data.text);
-            toast.success("Audio transcribed successfully!");
-          };
-        } catch (error) {
-          console.error("Transcription error:", error);
-          toast.error("Failed to process audio. Please try again.");
-        }
-        
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      mediaRecorder.start();
-      mediaRecorderRef.current = mediaRecorder;
-      setIsRecording(true);
-      toast.success("Recording... Tap again to stop");
-    } catch (error) {
-      console.error("Microphone access error:", error);
-      toast.error("Unable to access microphone. Please check permissions.");
-    }
-  };
-
-  const handlePlayAudio = async (text: string, messageId: number) => {
-    // Stop any currently playing audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-      setPlayingAudioId(null);
-    }
-
-    // If clicking the same message, just stop
-    if (playingAudioId === messageId) {
+      setIsRecording(false);
       return;
     }
 
     try {
-      setPlayingAudioId(messageId);
-      toast.info("Generating audio...");
-
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ text }),
-      });
-
-      if (!response.ok) {
-        toast.error("Failed to generate audio. Please try again.");
-        setPlayingAudioId(null);
+      // Check if browser supports Web Speech API
+      const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+      
+      if (!SpeechRecognition) {
+        toast.error("Speech recognition not supported in this browser");
         return;
       }
 
-      const data = await response.json();
-      
-      // Create audio element and play
-      const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
-      audioRef.current = audio;
-      
-      audio.onended = () => {
-        setPlayingAudioId(null);
-        audioRef.current = null;
-      };
-      
-      audio.onerror = () => {
-        toast.error("Failed to play audio.");
-        setPlayingAudioId(null);
-        audioRef.current = null;
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = sourceLang;
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+        toast.success("Listening... Speak now");
       };
 
-      await audio.play();
-      toast.success("Playing audio...");
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setInputText(transcript);
+        toast.success("Voice input captured!");
+        setIsRecording(false);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error:", event);
+        if (event.error !== 'no-speech') {
+          toast.error(`Recognition error: ${event.error}`);
+        }
+        setIsRecording(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      recognition.start();
+    } catch (error) {
+      console.error("Speech recognition error:", error);
+      toast.error("Unable to start speech recognition");
+      setIsRecording(false);
+    }
+  };
+
+  const handlePlayAudio = async (text: string, messageId: number, lang: string) => {
+    // If clicking the same message, stop
+    if (playingAudioId === messageId) {
+      window.speechSynthesis.cancel();
+      setPlayingAudioId(null);
+      return;
+    }
+
+    try {
+      // Stop any currently playing audio
+      window.speechSynthesis.cancel();
+      
+      setPlayingAudioId(messageId);
+
+      // Use Web Speech API for text-to-speech
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang;
+
+      utterance.onend = () => {
+        setPlayingAudioId(null);
+      };
+
+      utterance.onerror = (event) => {
+        console.error("Speech synthesis error:", event);
+        toast.error("Failed to play audio.");
+        setPlayingAudioId(null);
+      };
+
+      window.speechSynthesis.speak(utterance);
     } catch (error) {
       console.error("Audio playback error:", error);
       toast.error("Failed to play audio. Please try again.");
@@ -265,14 +224,14 @@ const Chat = () => {
                     text={message.original}
                     isOriginal={true}
                     language={message.sourceLang}
-                    onPlayAudio={() => handlePlayAudio(message.original, message.id * 2)}
+                    onPlayAudio={() => handlePlayAudio(message.original, message.id * 2, sourceLang)}
                     isPlaying={playingAudioId === message.id * 2}
                   />
                   <ChatBubble
                     text={message.translated}
                     isOriginal={false}
                     language={message.targetLang}
-                    onPlayAudio={() => handlePlayAudio(message.translated, message.id * 2 + 1)}
+                    onPlayAudio={() => handlePlayAudio(message.translated, message.id * 2 + 1, targetLang)}
                     isPlaying={playingAudioId === message.id * 2 + 1}
                   />
                 </div>
