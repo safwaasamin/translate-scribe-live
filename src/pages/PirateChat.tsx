@@ -7,6 +7,7 @@ import { Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Message {
   role: "user" | "assistant";
@@ -14,7 +15,7 @@ interface Message {
 }
 
 const PirateChat = () => {
-  const { loading } = useAuth();
+  const { loading, user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -23,6 +24,7 @@ const PirateChat = () => {
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -32,6 +34,41 @@ const PirateChat = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Create conversation on mount
+  useEffect(() => {
+    const createConversation = async () => {
+      if (!user) return;
+      
+      const { data, error } = await supabase
+        .from('conversation_history')
+        .insert({
+          user_id: user.id,
+          type: 'pirate_chat',
+          title: 'Pirate Chat Session'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating conversation:', error);
+      } else {
+        setConversationId(data.id);
+      }
+    };
+
+    createConversation();
+  }, [user]);
+
+  const saveMessage = async (message: Message) => {
+    if (!conversationId || !user) return;
+
+    await supabase.from('conversation_messages').insert({
+      conversation_id: conversationId,
+      original_text: message.content,
+      role: message.role
+    });
+  };
 
   if (loading) {
     return (
@@ -112,6 +149,11 @@ const PirateChat = () => {
           }
         }
       }
+
+      // Save assistant message after streaming completes
+      if (assistantContent) {
+        await saveMessage({ role: "assistant", content: assistantContent });
+      }
     } catch (error) {
       console.error("Chat error:", error);
       throw error;
@@ -125,6 +167,9 @@ const PirateChat = () => {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+
+    // Save user message
+    await saveMessage(userMessage);
 
     try {
       await streamChat(userMessage);

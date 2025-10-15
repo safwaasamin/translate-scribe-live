@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { ChatBubble } from "@/components/ChatBubble";
 import { LanguageSelector } from "@/components/LanguageSelector";
@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Message {
   id: number;
@@ -21,13 +22,14 @@ interface Message {
 
 const Chat = () => {
   const navigate = useNavigate();
-  const { loading } = useAuth();
+  const { loading, user } = useAuth();
   const [inputText, setInputText] = useState("");
   const [sourceLang, setSourceLang] = useState("en");
   const [targetLang, setTargetLang] = useState("es");
   const [isTranslating, setIsTranslating] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -37,6 +39,43 @@ const Chat = () => {
       targetLang: "Spanish",
     },
   ]);
+
+  // Create conversation on mount
+  useEffect(() => {
+    const createConversation = async () => {
+      if (!user) return;
+      
+      const { data, error } = await supabase
+        .from('conversation_history')
+        .insert({
+          user_id: user.id,
+          type: 'chat_translation',
+          title: `${sourceLang.toUpperCase()} → ${targetLang.toUpperCase()} Translation`
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating conversation:', error);
+      } else {
+        setConversationId(data.id);
+      }
+    };
+
+    createConversation();
+  }, [user, sourceLang, targetLang]);
+
+  const saveTranslation = async (original: string, translated: string) => {
+    if (!conversationId || !user) return;
+
+    await supabase.from('conversation_messages').insert({
+      conversation_id: conversationId,
+      original_text: original,
+      translated_text: translated,
+      source_lang: sourceLang,
+      target_lang: targetLang
+    });
+  };
 
   const handleSend = async () => {
     if (!inputText.trim() || isTranslating) return;
@@ -79,6 +118,10 @@ const Chat = () => {
       };
       
       setMessages([...messages, newMessage]);
+      
+      // Save to database
+      await saveTranslation(inputText, data.translatedText);
+      
       setInputText("");
     } catch (error) {
       console.error("Translation error:", error);

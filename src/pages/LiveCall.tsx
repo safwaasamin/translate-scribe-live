@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { ArrowLeftRight, Phone, PhoneOff } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TranscriptItem {
   id: number;
@@ -57,14 +58,52 @@ declare global {
 }
 
 const LiveCall = () => {
-  const { loading } = useAuth();
+  const { loading, user } = useAuth();
   const [sourceLang, setSourceLang] = useState("en");
   const [targetLang, setTargetLang] = useState("es");
   const [isCallActive, setIsCallActive] = useState(false);
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   
   const recognitionRef = useRef<SpeechRecognitionInterface | null>(null);
+
+  // Create conversation when call starts
+  useEffect(() => {
+    const createConversation = async () => {
+      if (!isCallActive || !user || conversationId) return;
+      
+      const { data, error } = await supabase
+        .from('conversation_history')
+        .insert({
+          user_id: user.id,
+          type: 'live_call',
+          title: `${sourceLang.toUpperCase()} → ${targetLang.toUpperCase()} Live Call`
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating conversation:', error);
+      } else {
+        setConversationId(data.id);
+      }
+    };
+
+    createConversation();
+  }, [isCallActive, user, sourceLang, targetLang]);
+
+  const saveTranslation = async (original: string, translated: string) => {
+    if (!conversationId || !user) return;
+
+    await supabase.from('conversation_messages').insert({
+      conversation_id: conversationId,
+      original_text: original,
+      translated_text: translated,
+      source_lang: sourceLang,
+      target_lang: targetLang
+    });
+  };
 
   const swapLanguages = () => {
     const temp = sourceLang;
@@ -104,15 +143,16 @@ const LiveCall = () => {
       const { translatedText } = await translateResponse.json();
 
       // Add to transcripts
-      setTranscripts(prev => [
-        ...prev,
-        {
-          id: Date.now(),
-          original: text,
-          translated: translatedText,
-          timestamp: new Date(),
-        },
-      ]);
+      const newTranscript = {
+        id: Date.now(),
+        original: text,
+        translated: translatedText,
+        timestamp: new Date(),
+      };
+      setTranscripts(prev => [...prev, newTranscript]);
+
+      // Save to database
+      await saveTranslation(text, translatedText);
 
       // Speak the translated text using Web Speech API
       const utterance = new SpeechSynthesisUtterance(translatedText);
@@ -189,6 +229,7 @@ const LiveCall = () => {
 
     window.speechSynthesis.cancel();
     setIsCallActive(false);
+    setConversationId(null); // Reset for next call
     toast.info("Call ended");
   };
 

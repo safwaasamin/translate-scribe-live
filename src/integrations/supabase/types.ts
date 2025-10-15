@@ -14,6 +14,74 @@ export type Database = {
   }
   public: {
     Tables: {
+      conversation_history: {
+        Row: {
+          created_at: string
+          id: string
+          title: string | null
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          title?: string | null
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          title?: string | null
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      conversation_messages: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          id: string
+          original_text: string
+          role: string | null
+          source_lang: string | null
+          target_lang: string | null
+          translated_text: string | null
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          id?: string
+          original_text: string
+          role?: string | null
+          source_lang?: string | null
+          target_lang?: string | null
+          translated_text?: string | null
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          original_text?: string
+          role?: string | null
+          source_lang?: string | null
+          target_lang?: string | null
+          translated_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversation_history"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
