@@ -15,14 +15,6 @@ interface Message {
 
 const PirateChat = () => {
   const { loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -40,6 +32,14 @@ const PirateChat = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   const streamChat = async (userMessage: Message) => {
     const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pirate-chat`;
