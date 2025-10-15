@@ -5,12 +5,40 @@ import { LanguageSelector } from "@/components/LanguageSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, ArrowLeftRight, Mic, Loader2, Volume2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+
+// Map language codes to proper locale codes for better voice support
+const getVoiceLocale = (langCode: string): string => {
+  const localeMap: Record<string, string> = {
+    'en': 'en-US',
+    'es': 'es-ES',
+    'fr': 'fr-FR',
+    'de': 'de-DE',
+    'zh': 'zh-CN',
+    'ar': 'ar-SA',
+    'hi': 'hi-IN',
+    'ta': 'ta-IN',
+    'ur': 'ur-IN',
+    'ja': 'ja-JP',
+    'pt': 'pt-BR',
+    'ru': 'ru-RU',
+    'ko': 'ko-KR',
+    'it': 'it-IT',
+    'bn': 'bn-IN',
+    'te': 'te-IN',
+    'mr': 'mr-IN',
+    'tr': 'tr-TR',
+    'vi': 'vi-VN',
+    'pl': 'pl-PL',
+  };
+  return localeMap[langCode] || langCode;
+};
 
 interface Message {
   id: number;
@@ -197,9 +225,17 @@ const Chat = () => {
       
       setPlayingAudioId(messageId);
 
-      // Use Web Speech API for text-to-speech
+      // Use Web Speech API for text-to-speech with proper locale
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang;
+      const voiceLocale = getVoiceLocale(lang);
+      utterance.lang = voiceLocale;
+
+      // Try to find a voice that matches the locale for better accent
+      const voices = window.speechSynthesis.getVoices();
+      const matchingVoice = voices.find(voice => voice.lang === voiceLocale);
+      if (matchingVoice) {
+        utterance.voice = matchingVoice;
+      }
 
       utterance.onend = () => {
         setPlayingAudioId(null);
@@ -259,27 +295,29 @@ const Chat = () => {
           </Card>
 
           {/* Chat Messages */}
-          <Card className="flex-1 card-gradient shadow-card p-6 overflow-y-auto">
-            <div className="space-y-4">
-              {messages.map((message) => (
-                <div key={message.id} className="space-y-3">
-                  <ChatBubble
-                    text={message.original}
-                    isOriginal={true}
-                    language={message.sourceLang}
-                    onPlayAudio={() => handlePlayAudio(message.original, message.id * 2, sourceLang)}
-                    isPlaying={playingAudioId === message.id * 2}
-                  />
-                  <ChatBubble
-                    text={message.translated}
-                    isOriginal={false}
-                    language={message.targetLang}
-                    onPlayAudio={() => handlePlayAudio(message.translated, message.id * 2 + 1, targetLang)}
-                    isPlaying={playingAudioId === message.id * 2 + 1}
-                  />
-                </div>
-              ))}
-            </div>
+          <Card className="flex-1 card-gradient shadow-card p-6 min-h-0">
+            <ScrollArea className="h-full pr-4">
+              <div className="space-y-4">
+                {messages.map((message) => (
+                  <div key={message.id} className="space-y-3">
+                    <ChatBubble
+                      text={message.original}
+                      isOriginal={true}
+                      language={message.sourceLang}
+                      onPlayAudio={() => handlePlayAudio(message.original, message.id * 2, sourceLang)}
+                      isPlaying={playingAudioId === message.id * 2}
+                    />
+                    <ChatBubble
+                      text={message.translated}
+                      isOriginal={false}
+                      language={message.targetLang}
+                      onPlayAudio={() => handlePlayAudio(message.translated, message.id * 2 + 1, targetLang)}
+                      isPlaying={playingAudioId === message.id * 2 + 1}
+                    />
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
           </Card>
 
           {/* Input */}
