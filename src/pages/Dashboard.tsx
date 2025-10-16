@@ -25,7 +25,7 @@ const Dashboard = () => {
       description: "Text & voice translation",
     },
     {
-      title: "Live Call Translation",
+      title: "Live Translation",
       icon: Phone,
       path: "/live-call",
       description: "Real-time voice translation",

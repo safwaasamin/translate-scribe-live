@@ -2,11 +2,13 @@ import { useState, useRef, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { ArrowLeftRight, Phone, PhoneOff } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowLeftRight, Phone, PhoneOff, Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface TranscriptItem {
   id: number;
@@ -65,8 +67,11 @@ const LiveCall = () => {
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [audioTranscript, setAudioTranscript] = useState<string>("");
   
   const recognitionRef = useRef<SpeechRecognitionInterface | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Create conversation when call starts
   useEffect(() => {
@@ -246,6 +251,55 @@ const LiveCall = () => {
     };
   }, []);
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check if file is audio
+    if (!file.type.startsWith('audio/')) {
+      toast.error('Please upload an audio file');
+      return;
+    }
+
+    setIsTranscribing(true);
+    setAudioTranscript("");
+
+    try {
+      // Convert audio file to base64
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      
+      reader.onload = async () => {
+        const base64Audio = reader.result as string;
+        const base64Data = base64Audio.split(',')[1];
+
+        // Call speech-to-text edge function
+        const { data, error } = await supabase.functions.invoke('speech-to-text', {
+          body: { audio: base64Data }
+        });
+
+        if (error) throw error;
+
+        if (data?.text) {
+          setAudioTranscript(data.text);
+          toast.success('Audio transcribed successfully');
+        }
+      };
+
+      reader.onerror = () => {
+        throw new Error('Failed to read audio file');
+      };
+    } catch (error) {
+      console.error('Transcription error:', error);
+      toast.error('Failed to transcribe audio');
+    } finally {
+      setIsTranscribing(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -260,81 +314,145 @@ const LiveCall = () => {
 
       <main className="flex-1 container mx-auto px-4 py-6">
         <div className="max-w-4xl mx-auto h-full flex flex-col gap-6">
-          {/* Language Selectors */}
-          <Card className="card-gradient shadow-card p-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-              <LanguageSelector value={sourceLang} onChange={setSourceLang} />
-              <div className="flex justify-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={swapLanguages}
-                  className="transition-smooth hover:scale-110"
-                  disabled={isCallActive}
-                >
-                  <ArrowLeftRight className="h-5 w-5" />
-                </Button>
-              </div>
-              <LanguageSelector value={targetLang} onChange={setTargetLang} />
-            </div>
-          </Card>
+          <Tabs defaultValue="live-call" className="flex-1 flex flex-col gap-6">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="live-call">Live Call</TabsTrigger>
+              <TabsTrigger value="audio-upload">Audio Upload</TabsTrigger>
+            </TabsList>
 
-          {/* Call Status */}
-          <Card className="card-gradient shadow-card p-8">
-            <div className="flex flex-col items-center gap-6">
-              <h2 className="text-2xl font-bold text-primary">
-                {isCallActive ? "Call Active" : "Ready to Start"}
-              </h2>
-              
-              <Button
-                onClick={isCallActive ? endCall : startCall}
-                size="lg"
-                variant={isCallActive ? "destructive" : "default"}
-                className="h-20 w-20 rounded-full transition-smooth shadow-lg"
-              >
-                {isCallActive ? (
-                  <PhoneOff className="h-8 w-8" />
-                ) : (
-                  <Phone className="h-8 w-8" />
-                )}
-              </Button>
-
-              {isCallActive && (
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-destructive rounded-full animate-pulse" />
-                  <span className="text-sm text-muted-foreground">
-                    Listening and translating...
-                  </span>
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Live Transcripts */}
-          <Card className="flex-1 card-gradient shadow-card p-6 overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">Live Transcription</h3>
-            <div className="space-y-4">
-              {transcripts.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  Start a call to see live translations
-                </p>
-              ) : (
-                transcripts.map((item) => (
-                  <div key={item.id} className="space-y-2">
-                    <div className="bg-secondary/20 rounded-lg p-3">
-                      <p className="text-sm text-muted-foreground mb-1">
-                        {item.timestamp.toLocaleTimeString()}
-                      </p>
-                      <p className="font-medium">{item.original}</p>
-                    </div>
-                    <div className="bg-primary/10 rounded-lg p-3">
-                      <p className="text-primary font-medium">{item.translated}</p>
-                    </div>
+            <TabsContent value="live-call" className="flex-1 flex flex-col gap-6 m-0">
+              {/* Language Selectors */}
+              <Card className="card-gradient shadow-card p-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                  <LanguageSelector value={sourceLang} onChange={setSourceLang} />
+                  <div className="flex justify-center">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={swapLanguages}
+                      className="transition-smooth hover:scale-110"
+                      disabled={isCallActive}
+                    >
+                      <ArrowLeftRight className="h-5 w-5" />
+                    </Button>
                   </div>
-                ))
-              )}
-            </div>
-          </Card>
+                  <LanguageSelector value={targetLang} onChange={setTargetLang} />
+                </div>
+              </Card>
+
+              {/* Call Status */}
+              <Card className="card-gradient shadow-card p-8">
+                <div className="flex flex-col items-center gap-6">
+                  <h2 className="text-2xl font-bold text-primary">
+                    {isCallActive ? "Call Active" : "Ready to Start"}
+                  </h2>
+                  
+                  <Button
+                    onClick={isCallActive ? endCall : startCall}
+                    size="lg"
+                    variant={isCallActive ? "destructive" : "default"}
+                    className="h-20 w-20 rounded-full transition-smooth shadow-lg"
+                  >
+                    {isCallActive ? (
+                      <PhoneOff className="h-8 w-8" />
+                    ) : (
+                      <Phone className="h-8 w-8" />
+                    )}
+                  </Button>
+
+                  {isCallActive && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-destructive rounded-full animate-pulse" />
+                      <span className="text-sm text-muted-foreground">
+                        Listening and translating...
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </Card>
+
+              {/* Live Transcripts */}
+              <Card className="flex-1 card-gradient shadow-card p-6 overflow-hidden">
+                <h3 className="text-lg font-semibold mb-4">Live Transcription</h3>
+                <ScrollArea className="h-96">
+                  <div className="space-y-4 pr-4">
+                    {transcripts.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-8">
+                        Start a call to see live translations
+                      </p>
+                    ) : (
+                      transcripts.map((item) => (
+                        <div key={item.id} className="space-y-2">
+                          <div className="bg-secondary/20 rounded-lg p-3">
+                            <p className="text-sm text-muted-foreground mb-1">
+                              {item.timestamp.toLocaleTimeString()}
+                            </p>
+                            <p className="font-medium">{item.original}</p>
+                          </div>
+                          <div className="bg-primary/10 rounded-lg p-3">
+                            <p className="text-primary font-medium">{item.translated}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="audio-upload" className="flex-1 flex flex-col gap-6 m-0">
+              {/* Audio Upload Section */}
+              <Card className="card-gradient shadow-card">
+                <CardHeader>
+                  <CardTitle className="text-foreground">Upload Audio File</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-border rounded-lg">
+                    <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground mb-4">Upload an audio file to transcribe</p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="audio/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      id="audio-upload"
+                    />
+                    <Button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isTranscribing}
+                    >
+                      {isTranscribing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Transcribing...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="mr-2 h-4 w-4" />
+                          Choose Audio File
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* Transcription Result */}
+                  {audioTranscript && (
+                    <Card className="bg-muted/50">
+                      <CardHeader>
+                        <CardTitle className="text-lg">Transcription</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ScrollArea className="h-64">
+                          <p className="text-foreground whitespace-pre-wrap">{audioTranscript}</p>
+                        </ScrollArea>
+                      </CardContent>
+                    </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
     </div>
