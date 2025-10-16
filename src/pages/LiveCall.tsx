@@ -69,6 +69,10 @@ const LiveCall = () => {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [audioTranscript, setAudioTranscript] = useState<string>("");
+  const [audioSourceLang, setAudioSourceLang] = useState("en");
+  const [audioTargetLang, setAudioTargetLang] = useState("es");
+  const [translatedAudioText, setTranslatedAudioText] = useState<string>("");
+  const [isTranslatingAudio, setIsTranslatingAudio] = useState(false);
   
   const recognitionRef = useRef<SpeechRecognitionInterface | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -263,6 +267,7 @@ const LiveCall = () => {
 
     setIsTranscribing(true);
     setAudioTranscript("");
+    setTranslatedAudioText("");
 
     try {
       // Convert audio file to base64
@@ -298,6 +303,52 @@ const LiveCall = () => {
         fileInputRef.current.value = '';
       }
     }
+  };
+
+  const handleTranslateAudio = async () => {
+    if (!audioTranscript) {
+      toast.error('No transcript to translate');
+      return;
+    }
+
+    setIsTranslatingAudio(true);
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translate-text`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            text: audioTranscript,
+            sourceLang: audioSourceLang,
+            targetLang: audioTargetLang,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Translation failed');
+      }
+
+      const { translatedText } = await response.json();
+      setTranslatedAudioText(translatedText);
+      toast.success('Translation completed');
+    } catch (error) {
+      console.error('Translation error:', error);
+      toast.error('Failed to translate text');
+    } finally {
+      setIsTranslatingAudio(false);
+    }
+  };
+
+  const swapAudioLanguages = () => {
+    const temp = audioSourceLang;
+    setAudioSourceLang(audioTargetLang);
+    setAudioTargetLang(temp);
   };
 
   if (loading) {
@@ -400,7 +451,7 @@ const LiveCall = () => {
               </Card>
             </TabsContent>
 
-            <TabsContent value="audio-upload" className="flex-1 flex flex-col gap-6 m-0">
+          <TabsContent value="audio-upload" className="flex-1 flex flex-col gap-6 m-0">
               {/* Audio Upload Section */}
               <Card className="card-gradient shadow-card">
                 <CardHeader>
@@ -438,16 +489,64 @@ const LiveCall = () => {
 
                   {/* Transcription Result */}
                   {audioTranscript && (
-                    <Card className="bg-muted/50">
-                      <CardHeader>
-                        <CardTitle className="text-lg">Transcription</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ScrollArea className="h-64">
-                          <p className="text-foreground whitespace-pre-wrap">{audioTranscript}</p>
-                        </ScrollArea>
-                      </CardContent>
-                    </Card>
+                    <>
+                      <Card className="bg-muted/50">
+                        <CardHeader>
+                          <CardTitle className="text-lg">Transcription</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ScrollArea className="h-48">
+                            <p className="text-foreground whitespace-pre-wrap">{audioTranscript}</p>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+
+                      {/* Language Selection for Translation */}
+                      <Card className="card-gradient shadow-card p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                          <LanguageSelector value={audioSourceLang} onChange={setAudioSourceLang} />
+                          <div className="flex justify-center">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={swapAudioLanguages}
+                              className="transition-smooth hover:scale-110"
+                            >
+                              <ArrowLeftRight className="h-5 w-5" />
+                            </Button>
+                          </div>
+                          <LanguageSelector value={audioTargetLang} onChange={setAudioTargetLang} />
+                        </div>
+                        <Button
+                          onClick={handleTranslateAudio}
+                          disabled={isTranslatingAudio}
+                          className="w-full mt-4"
+                        >
+                          {isTranslatingAudio ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Translating...
+                            </>
+                          ) : (
+                            'Translate'
+                          )}
+                        </Button>
+                      </Card>
+
+                      {/* Translation Result */}
+                      {translatedAudioText && (
+                        <Card className="bg-primary/10">
+                          <CardHeader>
+                            <CardTitle className="text-lg">Translation</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <ScrollArea className="h-48">
+                              <p className="text-foreground whitespace-pre-wrap">{translatedAudioText}</p>
+                            </ScrollArea>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </>
                   )}
                 </CardContent>
               </Card>
